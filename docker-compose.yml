@@ -4,7 +4,7 @@ services:
       context: .
       network: host
       dockerfile_inline: |
-        ARG PG_MAJOR_VER
+        ARG PG_MAJOR_VER=16
         # Use Postgres' official alpine version, it's just easier that way
         FROM postgres:$${PG_MAJOR_VER}-alpine
         ENV PG_MAJOR_VER=$${PG_MAJOR_VER}
