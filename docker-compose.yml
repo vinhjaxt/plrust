@@ -51,7 +51,6 @@ services:
         ARG CARGO_LOCKED_OPTION='--locked'
         ENV CARGO_LOCKED_OPTION=$${CARGO_LOCKED_OPTION}
 
-        RUN apk add --no-cache git
         WORKDIR /tmp
         # Install cargo-pgrx from source copied into this container
         RUN git clone https://github.com/pgcentralfoundation/pgrx cargo-pgrx --single-branch --depth 1
