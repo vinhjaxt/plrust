@@ -53,8 +53,8 @@ services:
 
         WORKDIR /tmp
         # Install cargo-pgrx from source copied into this container
-        RUN git clone https://github.com/pgcentralfoundation/pgrx cargo-pgrx --single-branch --depth 1
-        RUN echo "Running cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION" && cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION
+        RUN git clone https://github.com/pgcentralfoundation/pgrx --single-branch --depth 1
+        RUN cd pgrx; echo "Running cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION" && cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION
 
         # This seems strange, but by this point $$PG_MAJOR_VER is blank and
         # $$PG_MAJOR is always set to the correct version. I think it's something built
