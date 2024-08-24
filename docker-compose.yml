@@ -22,6 +22,6 @@ services:
          ENV ADD_RUSTFLAGS="-C target-feature=-crt-static"
          RUN cd /src/plrustc ; sed -i "s#env RUSTFLAGS=#env RUSTFLAGS='$${ADD_RUSTFLAGS} '#g" ./build.sh ; /bin/ash -x ./build.sh
 
-         RUN cd /src/plrustc ; cargo pgrx init --pg$PG_MAJOR $(which pg_config)
+         RUN cd /src/plrustc ; cargo pgrx init --pg16 $(which pg_config)
          RUN cd /src/plrust ; git clone https://github.com/tcdi/postgrestd.git --branch rust-$${RUST_VER} --recurse-submodules --depth 1 --single-branch ; cp postgrestd/x86_64-postgres-linux-gnu.json postgrestd/x86_64-postgres-linux-musl.json ; sed -i 's#x86_64-unknown-linux-gnu#x86_64-unknown-linux-musl#g' postgrestd/x86_64-postgres-linux-musl.json ; STD_TARGETS="$$(uname -m)-postgres-linux-musl" ./build
          RUN cd /src/plrust ; env RUSTFLAGS="-C target-feature=-crt-static" cargo pgrx install --release -c $(which pg_config)
