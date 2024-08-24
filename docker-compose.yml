@@ -53,7 +53,7 @@ services:
 
         WORKDIR /tmp
         # Install cargo-pgrx from source copied into this container
-        RUN git clone https://github.com/pgcentralfoundation/pgrx --single-branch --depth 1
+        RUN git clone https://github.com/pgcentralfoundation/pgrx --single-branch --depth 1 -b v0.11.0
         RUN cd pgrx; echo "Running cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION" && cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION
 
         # This seems strange, but by this point $$PG_MAJOR_VER is blank and
