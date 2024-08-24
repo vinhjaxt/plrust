@@ -4,24 +4,63 @@ services:
       context: .
       network: host
       dockerfile_inline: |
-         FROM postgres:16-alpine
-         ARG RUST_VER=1.72.0
-         RUN wget -qO- https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain=$${RUST_VER}
-         ENV PATH="/root/.cargo/bin:$${PATH}"
-         RUN rustup update $${RUST_VER}
-         RUN rustup default $${RUST_VER}
-         RUN rustup component add --toolchain $${RUST_VER} llvm-tools-preview rustc-dev rust-src --target x86_64-unknown-linux-musl
-         RUN apk --no-cache add pkgconfig jq git make musl-dev libstdc++-dev openssl-dev openssl-libs-static $$DOCKER_PG_LLVM_DEPS
-         WORKDIR /
-         RUN git clone --single-branch --depth 1 --recursive https://github.com/tcdi/plrust src
-         RUN chmod a+rwx `$$(which pg_config) --pkglibdir` `$$(which pg_config) --sharedir`/extension
+        ARG PG_MAJOR_VER
+        # Use Postgres' official alpine version, it's just easier that way
+        FROM postgres:$${PG_MAJOR_VER}-alpine
+        ENV PG_MAJOR_VER=$${PG_MAJOR_VER}
 
-         ENV PATH="/var/lib/postgresql/.cargo/bin:$${PATH}"
-         RUN cd /src ; PGRX_VERSION=$$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name=="pgrx")|.version'); cargo install cargo-pgrx --locked --force --version "$$PGRX_VERSION"
+        # Required for compiling Rust
+        ENV RUSTFLAGS="-C target-feature=-crt-static"
 
-         ENV ADD_RUSTFLAGS="-C target-feature=-crt-static"
-         RUN cd /src/plrustc ; sed -i "s#env RUSTFLAGS=#env RUSTFLAGS='$${ADD_RUSTFLAGS} '#g" ./build.sh ; /bin/ash -x ./build.sh
+        RUN apk add --no-cache \
+          bash \
+          clang \
+          clang-dev \
+          clang-libs \
+          coreutils \
+          curl \
+          gcc \
+          git \
+          make \
+          musl-dev \
+          openssl-dev \
+          util-linux-dev
 
-         RUN cd /src/plrustc ; cargo pgrx init --pg$PG_MAJOR=$(which pg_config)
-         RUN cd /src/plrust ; git clone https://github.com/tcdi/postgrestd.git --branch rust-$${RUST_VER} --recurse-submodules --depth 1 --single-branch ; cp postgrestd/x86_64-postgres-linux-gnu.json postgrestd/x86_64-postgres-linux-musl.json ; sed -i 's#x86_64-unknown-linux-gnu#x86_64-unknown-linux-musl#g' postgrestd/x86_64-postgres-linux-musl.json ; STD_TARGETS="$$(uname -m)-postgres-linux-musl" ./build
-         RUN cd /src/plrust ; env RUSTFLAGS="-C target-feature=-crt-static" cargo pgrx install --release 
+        # Set up permissions so that the rust user below can create extensions
+        RUN chmod a+rwx `$$(which pg_config) --pkglibdir` \
+          `$$(which pg_config) --sharedir`/extension \
+          /var/run/postgresql/
+
+        # Running pgrx and tests require a non-root user
+        RUN adduser -s /bin/bash -D rust
+        WORKDIR /checkout
+        RUN chown -R rust:rust /checkout
+        COPY --chown=rust:rust . /checkout
+
+        USER rust
+        # This environment variable is required for postgres while running the tests
+        ENV USER=rust
+
+        # Install cargo and Rust
+        RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
+        ENV PATH="/home/rust/.cargo/bin:$${PATH}"
+
+        # By default, we always want to use '--locked'. However, there are some circumstances
+        # where we might want to try it unlocked. In those one-off scenarios, the image
+        # can be built by docker with: --build-arg CARGO_LOCKED_OPTION=''
+        ARG CARGO_LOCKED_OPTION='--locked'
+        ENV CARGO_LOCKED_OPTION=$${CARGO_LOCKED_OPTION}
+
+        RUN apk add --no-cache git
+        WORKDIR /tmp
+        # Install cargo-pgrx from source copied into this container
+        RUN git clone https://github.com/pgcentralfoundation/pgrx cargo-pgrx --single-branch --depth 1
+        RUN echo "Running cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION" && cargo install --path cargo-pgrx/ $$CARGO_LOCKED_OPTION
+
+        # This seems strange, but by this point $$PG_MAJOR_VER is blank and
+        # $$PG_MAJOR is always set to the correct version. I think it's something built
+        # into the postgres:XX-alpine3.16 images, so it was easier to go with the grain
+        RUN cargo pgrx init --pg$$PG_MAJOR=$$(which pg_config)
+        WORKDIR /tmp
+        RUN git clone --single-branch --depth 1 --recursive https://github.com/tcdi/plrust
+        RUN cd plrust ; cargo pgrx install --release -c $$(which pg_config)
